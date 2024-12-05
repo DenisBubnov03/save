@@ -1,7 +1,14 @@
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler
-from commands import *
-from student_management import add_student, update_student_data, get_all_students
-from notifications import check_calls, check_payments
+
+from commands.start_commands import start, view_students
+from commands.states import TELEGRAM, FIO, START_DATE, COURSE_TYPE, TOTAL_PAYMENT, PAID_AMOUNT, FIELD_TO_EDIT, WAIT_FOR_NEW_VALUE
+import os
+
+from commands.student_editing_commands import *
+from commands.student_employment_commands import *
+from commands.student_info_commands import search_student, display_student_info
+from commands.student_management_command import *
+from commands.student_notifications import check_notifications
 
 # Токен Telegram-бота
 TELEGRAM_TOKEN = "7581276969:AAFHO1wVdwDbbV4c82IdY-lBOQX2HchgN0o"
@@ -34,10 +41,13 @@ def main():
         states={
             FIO_OR_TELEGRAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, find_student)],
             FIELD_TO_EDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_student_field)],
-            WAIT_FOR_NEW_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_value)],  # Это важно
+            WAIT_FOR_NEW_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_value)],
+            "COMPANY_NAME": [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name)],
+            "SALARY": [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_salary)],
         },
         fallbacks=[],
     )
+
     search_student_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.Regex("^Поиск ученика$"), search_student)],
         states={
