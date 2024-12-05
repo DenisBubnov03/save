@@ -11,19 +11,24 @@ def connect_to_sheets():
 worksheet = connect_to_sheets()
 
 # Добавление студента
-def add_student(fio, telegram, start_date, course_type, total_payment, paid_amount):
-    """
-    Добавляет студента в таблицу Google Sheets.
+def add_student(fio, telegram, start_date, course_type, total_payment, paid_amount, fully_paid):
+    """Добавление нового студента в Google Sheets."""
+    # Добавляем строку в таблицу
+    worksheet.append_row([
+        fio,              # ФИО
+        telegram,         # Telegram
+        start_date,       # Дата начала обучения
+        course_type,      # Тип обучения
+        total_payment,    # Стоимость обучения
+        paid_amount,      # Сумма оплаты
+        "",  # Дата последнего звонка (пустое значение при добавлении)
+        "",  # Компания (пустое значение при добавлении)
+        "",  # Дата трудоустройства (пустое значение при добавлении)
+        "",  # Зарплата (пустое значение при добавлении)
+        fully_paid,       # Полностью оплачено ("Да"/"Нет")
+        "Учится"          # Статус обучения (по умолчанию "Учится")
+    ])
 
-    Args:
-        fio (str): ФИО студента.
-        telegram (str): Telegram аккаунт студента.
-        start_date (str): Дата начала обучения в формате ДД.ММ.ГГГГ.
-        course_type (str): Тип обучения (например, Ручное тестирование).
-        total_payment (int): Общая стоимость обучения.
-        paid_amount (int): Сумма, уже оплаченная.
-    """
-    worksheet.append_row([fio, telegram, start_date, course_type, total_payment, paid_amount])
 
 # Удаление студента
 def delete_student(identifier):

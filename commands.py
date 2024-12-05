@@ -119,7 +119,10 @@ async def add_student_total_payment(update: Update, context: ContextTypes.DEFAUL
 async def add_student_paid_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         paid_amount = int(update.message.text)
-        if 0 <= paid_amount <= context.user_data["total_payment"]:
+        total_payment = context.user_data["total_payment"]
+
+        if 0 <= paid_amount <= total_payment:
+            fully_paid = "Да" if paid_amount == total_payment else "Нет"
             context.user_data["paid_amount"] = paid_amount
 
             # Сохранение данных в Google Sheets
@@ -128,8 +131,9 @@ async def add_student_paid_amount(update: Update, context: ContextTypes.DEFAULT_
                 context.user_data["telegram"],
                 context.user_data["start_date"],
                 context.user_data["course_type"],
-                context.user_data["total_payment"],
-                context.user_data["paid_amount"]
+                total_payment,
+                paid_amount,
+                fully_paid
             )
 
             await update.message.reply_text(
@@ -143,7 +147,7 @@ async def add_student_paid_amount(update: Update, context: ContextTypes.DEFAULT_
             return ConversationHandler.END
         else:
             await update.message.reply_text(
-                f"Сумма оплаты должна быть в пределах от 0 до {context.user_data['total_payment']}. Попробуйте ещё раз."
+                f"Сумма оплаты должна быть в пределах от 0 до {total_payment}. Попробуйте ещё раз."
             )
             return PAID_AMOUNT
     except ValueError:
@@ -151,6 +155,7 @@ async def add_student_paid_amount(update: Update, context: ContextTypes.DEFAULT_
             "Введите корректное число. Попробуйте ещё раз."
         )
         return PAID_AMOUNT
+
 
 
 # Поиск студента
@@ -214,7 +219,7 @@ async def edit_student_field(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def handle_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     student = context.user_data.get("student")
     field_to_edit = context.user_data.get("field_to_edit")
-    new_value = update.message.text  # Новое значение от пользователя
+    new_value = update.message.text
 
     if not student or not field_to_edit:
         await update.message.reply_text("Ошибка: данные для редактирования отсутствуют. Начните сначала.")
@@ -223,7 +228,7 @@ async def handle_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if field_to_edit == "Сумма оплаты":
         try:
             additional_payment = int(new_value)
-            current_payment = int(student.get("Сумма оплаты", 0))  # Убедитесь, что ключ совпадает с таблицей
+            current_payment = int(student.get("Сумма оплаты", 0))
             total_payment = int(student.get("Стоимость обучения", 0))
 
             if current_payment + additional_payment > total_payment:
@@ -234,63 +239,55 @@ async def handle_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return FIELD_TO_EDIT
 
             updated_payment = current_payment + additional_payment
-            result = update_student_data(student["ФИО"], "Сумма оплаты", updated_payment)
+            fully_paid = "Да" if updated_payment == total_payment else "Нет"
 
-            if result:
-                await update.message.reply_text(
-                    f"Сумма оплаты успешно обновлена! Теперь оплачено: {updated_payment} из {total_payment}.",
-                    reply_markup=ReplyKeyboardMarkup(
-                        [['Добавить студента', 'Просмотреть студентов'],
-                         ['Редактировать данные студента', 'Проверить уведомления'],
-                         ['Помощь']],
-                        one_time_keyboard=True
-                    )
-                )
-                return ConversationHandler.END
-            else:
-                await update.message.reply_text("Ошибка обновления данных. Попробуйте снова.")
-                return FIELD_TO_EDIT
-        except ValueError:
-            await update.message.reply_text("Введите корректное число. Попробуйте снова.")
-            return FIELD_TO_EDIT
+            update_student_data(student["ФИО"], "Сумма оплаты", updated_payment)
+            update_student_data(student["ФИО"], "Полностью оплачено", fully_paid)
 
-    else:
-        result = update_student_data(student["ФИО"], field_to_edit, new_value)
-        if result:
             await update.message.reply_text(
-                f"Поле '{field_to_edit}' успешно обновлено на '{new_value}'!",
+                f"Сумма оплаты успешно обновлена! Теперь оплачено: {updated_payment} из {total_payment}.",
                 reply_markup=ReplyKeyboardMarkup(
                     [['Добавить студента', 'Просмотреть студентов'],
-                     ['Редактировать данные студента', 'Проверить уведомления'],
-                     ['Помощь']],
+                     ['Редактировать данные студента', 'Проверить уведомления']],
                     one_time_keyboard=True
                 )
             )
             return ConversationHandler.END
-        else:
-            await update.message.reply_text("Ошибка обновления данных. Попробуйте снова.")
+        except ValueError:
+            await update.message.reply_text("Введите корректное число. Попробуйте снова.")
             return FIELD_TO_EDIT
+
 
 
 # Проверка уведомлений
 async def check_notifications(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    calls = check_calls()
-    payments = check_payments()
+    students = get_all_students()
+    payment_notifications = []
+    call_notifications = []
+
+    for student in students:
+        if student["Полностью оплачено"] == "Нет":
+            due_amount = int(student["Стоимость обучения"]) - int(student["Сумма оплаты"])
+            payment_notifications.append(f"Студент {student['ФИО']} должен {due_amount} рублей.")
+
+        if student["Статус обучения"] == "Учится" and not student.get("Дата последнего звонка"):
+            call_notifications.append(f"Студент {student['ФИО']} не звонил.")
 
     messages = []
 
-    if calls:
-        messages.append("❗ Уведомления по звонкам:")
-        messages.extend(calls)
-
-    if payments:
+    if payment_notifications:
         messages.append("❗ Уведомления по оплатам:")
-        messages.extend(payments)
+        messages.extend(payment_notifications)
+
+    if call_notifications:
+        messages.append("❗ Уведомления по звонкам:")
+        messages.extend(call_notifications)
 
     if not messages:
         await update.message.reply_text("✅ Все в порядке, уведомлений нет!")
     else:
         await update.message.reply_text("\n".join(messages))
+
 
 # Поиск и вывод информации об ученике
 async def search_student(update: Update, context: ContextTypes.DEFAULT_TYPE):
