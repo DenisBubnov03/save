@@ -1,4 +1,5 @@
 from commands.states import FIELD_TO_EDIT, WAIT_FOR_NEW_VALUE, FIO_OR_TELEGRAM
+from commands.student_employment_commands import edit_student_employment
 from student_management import get_all_students, update_student_data
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
@@ -48,23 +49,36 @@ async def edit_student(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def edit_student_field(update: Update, context: ContextTypes.DEFAULT_TYPE):
     field_to_edit = update.message.text
-    valid_fields = ["ФИО", "Telegram", "Дата последнего звонка", "Сумма оплаты"]
+    valid_fields = ["ФИО", "Telegram", "Дата последнего звонка", "Сумма оплаты", "Статус обучения"]
 
     if field_to_edit in valid_fields:
         context.user_data["field_to_edit"] = field_to_edit
-        await update.message.reply_text(
-            f"Введите новое значение для '{field_to_edit}':",)
-        return WAIT_FOR_NEW_VALUE  # Перевод в состояние ожидания нового значения
+        if field_to_edit == "Статус обучения":
+            await update.message.reply_text(
+                "Выберите новый статус:",
+                reply_markup=ReplyKeyboardMarkup(
+                    [["Учится", "Устроился", "Не учится"]],
+                    one_time_keyboard=True
+                )
+            )
+            return WAIT_FOR_NEW_VALUE
+        else:
+            await update.message.reply_text(
+                f"Введите новое значение для '{field_to_edit}':"
+            )
+            return WAIT_FOR_NEW_VALUE
+    elif field_to_edit == "Получил работу":
+        return await edit_student_employment(update, context)  # Логика перенаправлена
     else:
         await update.message.reply_text(
             "Некорректное поле. Выберите одно из предложенных.",
             reply_markup=ReplyKeyboardMarkup(
-                [['ФИО', 'Telegram', 'Дата последнего звонка', 'Сумма оплаты'],
-                ['Получил работу']],
+                [["ФИО", "Telegram", "Дата последнего звонка", "Сумма оплаты", "Статус обучения"]],
                 one_time_keyboard=True
             )
         )
-        return FIELD_TO_EDIT  # Повторно запрашиваем выбор поля
+        return FIELD_TO_EDIT
+
 
 
 async def handle_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -99,7 +113,7 @@ async def handle_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Сумма оплаты успешно обновлена! Теперь оплачено: {updated_payment} из {total_payment}.",
                 reply_markup=ReplyKeyboardMarkup(
                     [['Добавить студента', 'Просмотреть студентов'],
-                     ['Редактировать данные студента', 'Проверить уведомления']],
+                     ['Редактировать данные студента', 'Проверить уведомления'], ['Статистика']],
                     one_time_keyboard=True
                 )
             )
@@ -107,3 +121,6 @@ async def handle_new_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             await update.message.reply_text("Введите корректное число. Попробуйте снова.")
             return FIELD_TO_EDIT
+
+
+

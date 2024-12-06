@@ -1,12 +1,11 @@
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ConversationHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from commands.student_statistic_commands import *
+from commands.start_commands import start, view_students, exit_to_main_menu
 
-from commands.start_commands import start, view_students
-from commands.states import TELEGRAM, FIO, START_DATE, COURSE_TYPE, TOTAL_PAYMENT, PAID_AMOUNT, FIELD_TO_EDIT, WAIT_FOR_NEW_VALUE
-import os
 
 from commands.student_editing_commands import *
 from commands.student_employment_commands import *
-from commands.student_info_commands import search_student, display_student_info
+from commands.student_info_commands import *
 from commands.student_management_command import *
 from commands.student_notifications import check_notifications
 
@@ -14,9 +13,6 @@ from commands.student_notifications import check_notifications
 TELEGRAM_TOKEN = "7581276969:AAFHO1wVdwDbbV4c82IdY-lBOQX2HchgN0o"
 
 # Состояния для ConversationHandler
-TELEGRAM, FIO, FIO_OR_TELEGRAM, FIELD_TO_EDIT, START_DATE, COURSE_TYPE, TOTAL_PAYMENT, PAID_AMOUNT, WAIT_FOR_NEW_VALUE = range(9)
-
-
 def main():
     # Создание приложения Telegram
     application = Application.builder().token(TELEGRAM_TOKEN).build()
@@ -41,9 +37,16 @@ def main():
         states={
             FIO_OR_TELEGRAM: [MessageHandler(filters.TEXT & ~filters.COMMAND, find_student)],
             FIELD_TO_EDIT: [MessageHandler(filters.TEXT & ~filters.COMMAND, edit_student_field)],
-            WAIT_FOR_NEW_VALUE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_value)],
+            WAIT_FOR_NEW_VALUE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_value),
+                MessageHandler(filters.Regex("^Получил работу$"), edit_student_employment),
+                MessageHandler(filters.Regex("^Да, изменить место работы$"), handle_employment_confirmation),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_salary),
+            ],
             "COMPANY_NAME": [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name)],
             "SALARY": [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_salary)],
+            "CONFIRMATION": [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_employment_confirmation)],
         },
         fallbacks=[],
     )
@@ -56,6 +59,26 @@ def main():
         fallbacks=[],
     )
 
+    statistics_handler = ConversationHandler(
+        entry_points=[MessageHandler(filters.Regex("^Статистика$"), show_statistics_menu)],
+        states={
+            "STATISTICS_MENU": [
+                MessageHandler(filters.Regex("^📈 Общая статистика$"), show_general_statistics),
+                MessageHandler(filters.Regex("^📚 По типу обучения$"), show_course_type_menu),
+            ],
+            "COURSE_TYPE_MENU": [
+                MessageHandler(filters.Regex("^👨‍💻 Ручное тестирование$"), show_manual_testing_statistics),
+                MessageHandler(filters.Regex("^🤖 Автотестирование$"), show_automation_testing_statistics),
+                MessageHandler(filters.Regex("^💻 Фуллстек$"), show_fullstack_statistics),
+                MessageHandler(filters.Regex("^🔙 Назад$"), show_statistics_menu),
+            ],
+        },
+        fallbacks=[
+            MessageHandler(filters.Regex("^🔙 Вернуться в меню$"), exit_to_main_menu),  # Добавляем обработчик для выхода
+        ],
+    )
+
+
     # Регистрация обработчиков
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.Regex("^Просмотреть студентов$"), view_students))
@@ -63,6 +86,8 @@ def main():
     application.add_handler(add_student_handler)
     application.add_handler(edit_student_handler)
     application.add_handler(search_student_handler)
+    application.add_handler(statistics_handler)
+
 
     # application.add_handler(MessageHandler(filters.Regex("Отмена"), cancel))  # Доп. проверка
     # application.add_handler(MessageHandler(filters.ALL, debug))
